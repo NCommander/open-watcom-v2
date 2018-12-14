@@ -130,9 +130,12 @@ static void printUnixHeader( section_ptr section )
         *ca = '\0';
 
         if( (DFormat & DFF_ASM) == 0 ) {
-            BufferConcat("\t\t\t\t");
+            BufferConcat( "\t\t\t\t" );
         }
-        BufferStore(".new_section %s, \"%s\"", section->name, attributes );
+        BufferConcat( ".new_section " );
+        BufferConcat( section->name );
+        BufferConcat( ", " );
+        BufferQuoteText( attributes, '\"' );
     } else {
         if( (flags & ORL_SEC_FLAG_REMOVE) == 0 ) {
             *ca++ = 'a';
@@ -145,14 +148,18 @@ static void printUnixHeader( section_ptr section )
         }
         *ca++ = '\0';
         if( (DFormat & DFF_ASM) == 0 ) {
-            BufferConcat("\t\t\t\t");
+            BufferConcat( "\t\t\t\t" );
         }
-        BufferStore(".section %s, \"%s\"", section->name, attributes );
+        BufferConcat( ".section " );
+        BufferConcat( section->name );
+        BufferConcat( ", " );
+        BufferQuoteText( attributes, '\"' );
         BufferConcatNL();
         if( (DFormat & DFF_ASM) == 0 ) {
-            BufferConcat("\t\t\t\t");
+            BufferConcat( "\t\t\t\t" );
         }
-        BufferStore(".align %d", (int)alignment );
+        BufferConcat( ".align " );
+        BufferDecimal( (int)alignment );
     }
 
     BufferConcatNL();
@@ -275,22 +282,29 @@ static void printMasmHeader( section_ptr section )
         }
         if( flags & ORL_SEC_FLAG_COMDAT ) {
             BufferConcat( "; ERROR: Comdat symbols cannot be assembled." );
-        } else if( frame == ORL_SEC_NO_ABS_FRAME ) {
-            alignment = ORLSecGetAlignment( section->shnd );
-            combine = ORLSecGetCombine( section->shnd );
-            BufferQuoteName( name );
-            BufferStore( "\t\tSEGMENT\t%s %s %s '%s'",
-                         getAlignment( alignment ), getCombine( combine ),
-                         getUse( flags ), class );
         } else {
             BufferQuoteName( name );
-            BufferStore( "\t\tSEGMENT\t at %08X %s '%s'", (unsigned)frame << 4,
-                         getUse( flags ), class );
+            BufferConcat( "\t\tSEGMENT\t" );
+            if( frame == ORL_SEC_NO_ABS_FRAME ) {
+                alignment = ORLSecGetAlignment( section->shnd );
+                combine = ORLSecGetCombine( section->shnd );
+                BufferConcat( getAlignment( alignment ) );
+                BufferConcatChar( ' ' );
+                BufferConcat( getCombine( combine ) );
+            } else {
+                BufferConcat( " at " );
+                BufferHexU32( 8, frame << 4 );
+            }
+            BufferConcatChar( ' ' );
+            BufferConcat( getUse( flags ) );
+            BufferConcatChar( ' ' );
+            BufferQuoteText( class, '\'' );
         }
     } else {
         if( flags & ORL_SEC_FLAG_COMDAT ) {
             char    *comname;
             size_t  len;
+            bool    is_segment;
 
             if( Options & NODEMANGLE_NAMES ) {
                 len = strlen( name );
@@ -307,52 +321,64 @@ static void printMasmHeader( section_ptr section )
                 shnd = ORLSecGetAssociated( section->shnd );
                 grp = ORLSecGetGroup( section->shnd );
                 astr = "SEGMENT";
+                is_segment = true;
             } else {
                 shnd = ORL_NULL_HANDLE;
                 grp = ORL_NULL_HANDLE;
                 alignment = ORLSecGetAlignment( section->shnd );
                 astr = getAlignment( alignment );
+                is_segment = false;
             }
-            if( shnd != ORL_NULL_HANDLE || grp != ORL_NULL_HANDLE ) {
+            BufferConcat( "Comdat: " );
+            BufferConcat(  ( is_segment ) ? comname : name );
+            BufferConcatChar( ' ' );
+            BufferConcat( astr );
+            BufferConcatChar( ' ' );
+            BufferConcat( getPick( combine ) );
+            BufferConcatChar( ' ' );
+            if( is_segment ) {
                 name = NULL;
                 gname = NULL;
-                if( grp != ORL_NULL_HANDLE ) {
+                if( grp != ORL_NULL_HANDLE )
                     gname = ORLGroupName( grp );
-                }
-                if( shnd != ORL_NULL_HANDLE ) {
+                if( shnd != ORL_NULL_HANDLE )
                     name = ORLSecGetName( shnd );
-                    if( name != NULL ) {
-                        if( gname != NULL ) {
-                            name = gname;
-                            gname = NULL;
-                        } else {
-                            name = "";
-                        }
+                if( name == NULL ) {
+                    if( gname == NULL ) {
+                        name = "";
+                    } else {
+                        name = gname;
+                        gname = NULL;
                     }
-                } else {
-                    name = gname;
-                    gname = NULL;
                 }
+                BufferConcatChar( '\'' );
                 if( gname != NULL ) {
-                    BufferStore( "Comdat: %s %s %s '%s:%s' %08X bytes", comname,
-                                 astr, getPick( combine ), gname, name, size );
-                } else {
-                    BufferStore( "Comdat: %s %s %s '%s' %08X bytes", comname,
-                                 astr, getPick( combine ), name, size );
+                    BufferConcat( gname );
+                    BufferConcatChar( ':' );
                 }
-                MemFree( comname );
+                BufferConcat( name );
+                BufferConcatChar( '\'' );
             } else {
-                BufferStore( "Comdat: %s %s %s %s %08X bytes", name, astr,
-                         getPick( combine ), getAlloc( combine ), size );
+                BufferConcat( getAlloc( combine ) );
             }
-        } else if( frame == ORL_SEC_NO_ABS_FRAME ) {
-            alignment = ORLSecGetAlignment( section->shnd );
-            BufferStore( "Segment: %s %s %s %08X bytes", name,
-                         getAlignment( alignment ), getUse( flags ), size );
+            MemFree( comname );
         } else {
-            BufferStore( "Segment: %s at %08X %s %08X bytes", name, frame << 4,
-                         getUse( flags ), size );
+            BufferConcat( "Segment: " );
+            BufferConcat( name );
+            if( frame == ORL_SEC_NO_ABS_FRAME ) {
+                alignment = ORLSecGetAlignment( section->shnd );
+                BufferConcatChar( ' ' );
+                BufferConcat( getAlignment( alignment ) );
+            } else {
+                BufferConcat( " at " );
+                BufferHexU32( 8, frame << 4 );
+            }
+            BufferConcatChar( ' ' );
+            BufferConcat( getUse( flags ) );
         }
+        BufferConcatChar( ' ' );
+        BufferHex8( size );
+        BufferConcat( " bytes" );
     }
     BufferConcatNL();
     BufferPrint();
@@ -371,7 +397,9 @@ void PrintAssumeHeader( section_ptr section )
         } else {
             name = section->name;
         }
-        BufferStore( "\t\tASSUME CS:%s, DS:DGROUP, SS:DGROUP", name );
+        BufferConcat( "\t\tASSUME CS:" );
+        BufferConcat( name );
+        BufferConcat( ", DS:DGROUP, SS:DGROUP" );
         BufferConcatNL();
         BufferPrint();
     }
@@ -398,55 +426,9 @@ void PrintTail( section_ptr section )
             name = "";
         }
         BufferQuoteName( name );
-        BufferStore( "\t\tENDS", name );
+        BufferConcat( "\t\tENDS" );
         BufferConcatNL();
         BufferPrint();
-    }
-}
-
-
-void PrintLinePrefixAddress( dis_sec_offset off, bool is32bit )
-{
-    if( is32bit ) {
-        BufferStore( "%08X", off );
-    } else {
-        BufferStore( "%04X", off );
-    }
-}
-
-
-void PrintLinePrefixData( unsigned_8 *data, dis_sec_offset off, dis_sec_offset total, unsigned item_size, unsigned len )
-{
-    unsigned    done;
-    union ptr {
-        unsigned_8      u8;
-        unsigned_16     u16;
-        unsigned_32     u32;
-    }           *p;
-
-    p = (union ptr *)( data + off );
-    total -= off;
-    BufferConcat( " " );
-    for( done = 0; done < len; done += item_size ) {
-        BufferConcat( " " );
-        if( done < total ) {
-            if( item_size == 1 ) {
-                BufferStore( "%02X", p->u8 );
-            } else if( item_size == 2 ) {
-                BufferStore( "%04X", p->u16 );
-            } else if( item_size == 4 ) {
-                BufferStore( "%08X", p->u32 );
-            }
-            p = (union ptr *)( (char *)p + item_size );
-        } else {
-            if( item_size == 1 ) {
-                BufferConcat( "  " );
-            } else if( item_size == 2 ) {
-                BufferConcat( "    " );
-            } else if( item_size == 4 ) {
-                BufferConcat( "        " );
-            }
-        }
     }
 }
 
@@ -485,7 +467,8 @@ static return_val disassembleSection( section_ptr section, unsigned_8 *contents,
         disassembly_errors = DoPass2( section, contents, size, sec_label_list, sec_ref_list );
         if( (DFormat & DFF_ASM) == 0 ) {
             if( disassembly_errors > 0 ) {
-                BufferStore( "%d ", (int)disassembly_errors );
+                BufferDecimal( (int)disassembly_errors );
+                BufferConcatChar( ' ' );
                 BufferMsg( DIS_ERRORS );
             } else {
                 BufferMsg( NO_DIS_ERRORS );
@@ -518,27 +501,23 @@ static label_entry dumpLabel( label_entry l_entry, section_ptr section,
         switch( l_entry->type ){
         case LTYP_ABSOLUTE:
             break;
-        case LTYP_UNNAMED:
-            PrintLinePrefixAddress( loop, is32bit );
-            BufferAlignToTab( PREFIX_SIZE_TABS );
-            if( loop != l_entry->offset ) {
-                BufferStore( "%c$%d equ $-%d", LabelChar, l_entry->label.number, (int)( loop - l_entry->offset ) );
-            } else {
-                BufferStore( "%c$%d:", LabelChar, l_entry->label.number );
-            }
-            BufferConcatNL();
-            break;
         case LTYP_SECTION:
         case LTYP_NAMED:
             if( strcmp( l_entry->label.name, section->name ) == 0 )
                 break;
-            /* fall down */
+            /* fall through */
+        case LTYP_UNNAMED:
         default:
-            PrintLinePrefixAddress( loop, is32bit );
+            BufferLinePrefixAddress( loop, is32bit );
             BufferAlignToTab( PREFIX_SIZE_TABS );
-            BufferQuoteName( l_entry->label.name );
+            if( l_entry->type == LTYP_UNNAMED ) {
+                BufferLabelNum( l_entry->label.number );
+            } else {
+                BufferQuoteName( l_entry->label.name );
+            }
             if( loop != l_entry->offset ) {
-                BufferStore( " equ $-%d", (int)( loop - l_entry->offset ) );
+                BufferConcat( " equ $-" );
+                BufferDecimal( (int)( loop - l_entry->offset ) );
             } else {
                 BufferConcatChar( ':' );
             }
@@ -575,7 +554,9 @@ static dis_sec_offset checkForDupLines( unsigned_8 *contents, dis_sec_offset loo
     if( lines < MIN_DUP_LINES )
         return( 0 );
     BufferConcatNL();
-    BufferStore( "\t--- Above line repeats %u times ---", lines );
+    BufferConcat( "\t--- Above line repeats " );
+    BufferUnsigned( lines );
+    BufferConcat( " times ---" );
     return( d );
 }
 
@@ -583,12 +564,13 @@ void DumpDataFromSection( unsigned_8 *contents, dis_sec_offset start,
                           dis_sec_offset end, label_entry *lab_entry,
                           ref_entry *reference_entry, section_ptr section )
 {
-    dis_sec_offset              loop;
-    unsigned                    loop2;
-    unsigned                    amount;
-    label_entry                 l_entry;
-    ref_entry                   r_entry;
-    bool                        is32bit;
+    dis_sec_offset      loop;
+    unsigned            loop2;
+    unsigned            amount;
+    label_entry         l_entry;
+    ref_entry           r_entry;
+    bool                is32bit;
+    char                c;
 
     is32bit = ( end >= 0x10000 );
 
@@ -625,19 +607,19 @@ void DumpDataFromSection( unsigned_8 *contents, dis_sec_offset start,
 
         /* This is a bit fake.  We want to print a full 16 columns,
            but we only want the amount of data specified, up to 16. */
-        PrintLinePrefixAddress( loop, is32bit );
-        PrintLinePrefixData( contents, loop, loop + amount, 1, 16 );
-        BufferConcat( " " );
+        BufferLinePrefixAddress( loop, is32bit );
+        BufferLinePrefixData( contents, loop, loop + amount, 1, 16 );
+        BufferConcatChar( ' ' );
         if( r_entry != NULL && r_entry->offset == loop ) {
             HandleRefInData( r_entry, contents + loop, true );
             loop += amount;
         } else {
-            for( loop2 = 0; loop2 < amount; loop2++, loop++ ) {
-                if( contents[loop] >= ' ' && contents[loop] <= '~' ) {
-                    BufferStore( "%c", contents[loop] );
-                } else {
-                    BufferConcat( "." );
+            for( loop2 = 0; loop2 < amount; loop2++ ) {
+                c = contents[loop++];
+                if( c < ' ' || c > '~' ) {
+                    c = '.';
                 }
+                BufferConcatChar( c );
             }
 
             // We don't want to display a lot of duplicate lines
@@ -728,20 +710,19 @@ static void bssSection( section_ptr section, dis_sec_size size, unsigned pass )
 
     for( l_entry = sec_label_list->first; l_entry != NULL; l_entry = l_entry->next ) {
         switch( l_entry->type ) {
-        case LTYP_UNNAMED:
-            PrintLinePrefixAddress( l_entry->offset, is32bit );
-            BufferAlignToTab( PREFIX_SIZE_TABS );
-            BufferStore("%c$%d:", LabelChar, l_entry->label.number );
-            BufferConcatNL();
-            break;
         case LTYP_SECTION:
             if( strcmp( l_entry->label.name, section->name ) == 0 )
                 break;
-            /* Fall through */
+            /* fall through */
+        case LTYP_UNNAMED:
         case LTYP_NAMED:
-            PrintLinePrefixAddress( l_entry->offset, is32bit );
+            BufferLinePrefixAddress( l_entry->offset, is32bit );
             BufferAlignToTab( PREFIX_SIZE_TABS );
-            BufferQuoteName( l_entry->label.name );
+            if( l_entry->type == LTYP_UNNAMED ) {
+                BufferLabelNum( l_entry->label.number );
+            } else {
+                BufferQuoteName( l_entry->label.name );
+            }
             BufferConcatChar( ':' );
             BufferConcatNL();
             break;
@@ -750,7 +731,9 @@ static void bssSection( section_ptr section, dis_sec_size size, unsigned pass )
     }
     BufferConcatNL();
     BufferMsg( BSS_SIZE );
-    BufferStore(" %d ", size );
+    BufferConcatChar( ' ' );
+    BufferDecimal( size );
+    BufferConcatChar( ' ' );
     BufferMsg( BYTES );
     BufferConcatNL();
     BufferConcatNL();
@@ -992,7 +975,8 @@ static void doPrologue( void )
                 }
             }
         } else if( SourceFileInObject ) {
-            BufferStore( "Module: %s", SourceFileInObject );
+            BufferConcat( "Module: " );
+            BufferConcat( SourceFileInObject );
             BufferConcatNL();
             BufferPrint();
         }

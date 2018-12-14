@@ -95,23 +95,43 @@ bool IsMasmOutput( void )
 
 static void printRawAndAddress( const char *raw_data, dis_sec_offset address )
 {
-    switch( strlen( raw_data ) ) {
+    int     len;
+
+    len = strlen( raw_data );
+    switch( len ) {
     case 0:
-        BufferStore( "      00     %04X", address );
-        break;
+        BufferConcat( "  " );
+        /* fall through */
     case 1:
-        BufferStore( "    00%02X     %04X", raw_data[0], address );
-        break;
+        BufferConcat( "  " );
+        /* fall through */
     case 2:
-        BufferStore( "  00%02X%02X     %04X", raw_data[1], raw_data[0], address );
-        break;
+        BufferConcat( "  " );
+        /* fall through */
     case 3:
-        BufferStore( "00%02X%02X%02X     %04X", raw_data[2], raw_data[1], raw_data[0], address );
-        break;
+        BufferConcat( "00" );
+        /* fall through */
     default:
-        BufferStore( "%02X%02X%02X%02X     %04X", raw_data[3], raw_data[2], raw_data[1], raw_data[0], address );
         break;
     }
+    switch( len ) {
+    default:
+        BufferHexU32( 2, raw_data[3] );
+        /* fall through */
+    case 3:
+        BufferHexU32( 2, raw_data[2] );
+        /* fall through */
+    case 2:
+        BufferHexU32( 2, raw_data[1] );
+        /* fall through */
+    case 1:
+        BufferHexU32( 2, raw_data[0] );
+        /* fall through */
+    case 0:
+        break;
+    }
+    BufferConcat( "     " );
+    BufferHexU32( 4, address );
 }
 
 static bool printableChar( char c )
@@ -179,9 +199,7 @@ static size_t printString( const char *string, string_type type )
     }
     buffer[j] = '\0';
 
-    BufferConcatChar( '"' );
-    BufferConcat( buffer );
-    BufferConcatChar( '"' );
+    BufferQuoteText( buffer, '\"' );
     BufferPrint();
     MemFree( buffer );
     switch( type ) {
@@ -215,8 +233,8 @@ static size_t tryDUP( unsigned_8 *bytes, size_t i, size_t size )
     if( dup < MIN_DUP_LINES )
         return( 0 );
 
-    BufferStore( "0%XH DUP(", dup );
-
+    BufferHexU32( 0, dup );
+    BufferConcat( " DUP(" );
     value.u._32[I64HI32] = 0;
     for( dup = 0; dup < 7; dup++ ) {
         value.u._32[I64LO32] = bytes[i + dup];
@@ -474,12 +492,12 @@ unsigned HandleRefInData( ref_entry r_entry, void *data, bool asmLabels )
         value.u._32[I64LO32] = *(unsigned_32 *)data;
         value.u._32[I64HI32] = *((unsigned_32 *)data + 1);
         if( value.u._32[I64LO32] != 0 || value.u._32[I64HI32] != 0 ) {
-            BufferConcat( "+" );
+            BufferConcat( "+0x" );
             if( value.u._32[I64HI32] != 0 ) {
-                BufferStore( "0x%x", value.u._32[I64HI32] );
-                BufferStore( "%08x", value.u._32[I64LO32] );
+                BufferHexU32( 0, value.u._32[I64HI32] );
+                BufferHexU32( 8, value.u._32[I64LO32] );
             } else {
-                BufferStore( "0x%x", value.u._32[I64LO32] );
+                BufferHexU32( 0, value.u._32[I64LO32] );
             }
         }
         break;
@@ -543,38 +561,25 @@ static label_entry dumpAsmLabel( label_entry l_entry, section_ptr section,
                 break;
             /* fall through */
         case LTYP_UNNAMED:
-            if( raw ) {
-                strncpy( buffer, (char *)contents + curr_pos, sizeof( unsigned_32 ) );
+            if( (DFormat & DFF_ASM) == 0 ) {
+                BufferConcat( "\t     " );
+                BufferHexU32( 4, curr_pos );
+                BufferConcatChar( '\t' );
             }
             if( l_entry->type == LTYP_UNNAMED ) {
-                if( (DFormat & DFF_ASM) == 0 ) {
-                    BufferStore( "\t     %04X\t%c$%d:", LabelChar, curr_pos, l_entry->label.number );
-                    if( raw ) {
-                        printRawAndAddress( buffer, curr_pos );
-                    }
-                } else {
-                    if( l_entry->offset != curr_pos ) {
-                        BufferStore( "%c$%d equ $-%d", LabelChar, l_entry->label.number, (int)( curr_pos - l_entry->offset ) );
-                    } else {
-                        BufferStore( "%c$%d:", LabelChar, l_entry->label.number );
-                    }
-                }
+                BufferLabelNum( l_entry->label.number );
             } else {
-                if( (DFormat & DFF_ASM) == 0 ) {
-                    BufferStore( "\t     %04X\t", curr_pos );
-                    BufferQuoteName( l_entry->label.name );
-                    BufferConcatChar( ':' );
-                    if( raw ) {
-                        printRawAndAddress( buffer, curr_pos );
-                    }
-                } else {
-                    BufferQuoteName( l_entry->label.name );
-                    if( l_entry->offset != curr_pos ) {
-                        BufferStore( " equ $-%d", (int)( curr_pos - l_entry->offset ) );
-                    } else {
-                        BufferConcatChar( ':' );
-                    }
-                }
+                BufferQuoteName( l_entry->label.name );
+            }
+            if( (DFormat & DFF_ASM) && l_entry->offset != curr_pos ) {
+                BufferConcat( " equ $-" );
+                BufferDecimal( (int)( curr_pos - l_entry->offset ) );
+            } else {
+                BufferConcatChar( ':' );
+            }
+            if( (DFormat & DFF_ASM) == 0 && raw ) {
+                strncpy( buffer, (char *)contents + curr_pos, sizeof( unsigned_32 ) );
+                printRawAndAddress( buffer, curr_pos );
             }
             BufferConcatNL();
             BufferPrint();
@@ -737,20 +742,23 @@ static return_val bssUnixASMSection( section_ptr section, dis_sec_size size, lab
         }
         switch( prev_entry->type ) {
         case LTYP_UNNAMED:
-            BufferStore( "%s%c$%d", prefix, LabelChar, prev_entry->label.number );
-            break;
         case LTYP_SECTION:
         case LTYP_NAMED:
             BufferConcat( prefix );
-            BufferQuoteName( prev_entry->label.name );
+            if( prev_entry->type == LTYP_UNNAMED ) {
+                BufferLabelNum( prev_entry->label.number );
+            } else {
+                BufferQuoteName( prev_entry->label.name );
+            }
             break;
         default:
             break;
         }
         if( dsiz ) {
-            BufferStore( ", 0x%08x", dsiz );
+            BufferConcat( ", 0x" );
+            BufferHexU32( 8, dsiz );
         } else {
-            BufferConcat( ":" );
+            BufferConcatChar( ':' );
         }
         BufferConcatNL();
         BufferPrint();
@@ -766,18 +774,21 @@ static return_val bssUnixASMSection( section_ptr section, dis_sec_size size, lab
         }
         switch( prev_entry->type ) {
         case LTYP_UNNAMED:
-            BufferStore( "%s%c$%d", prefix, LabelChar, prev_entry->label.number );
-            break;
         case LTYP_SECTION:
         case LTYP_NAMED:
             BufferConcat( prefix );
-            BufferQuoteName( prev_entry->label.name );
+            if( prev_entry->type == LTYP_UNNAMED ) {
+                BufferLabelNum( prev_entry->label.number );
+            } else {
+                BufferQuoteName( prev_entry->label.name );
+            }
             break;
         default:
             break;
         }
         if( dsiz ) {
-            BufferStore( ", 0x%08x", dsiz );
+            BufferConcat( ", 0x" );
+            BufferHexU32( 8, dsiz );
         } else {
             BufferConcatChar( ':' );
         }
@@ -813,7 +824,7 @@ static return_val bssMasmASMSection( section_ptr section, dis_sec_size size, lab
 
             switch( l_entry->type ) {
             case LTYP_UNNAMED:
-                BufferStore( "%c$%d", LabelChar, l_entry->label.number );
+                BufferLabelNum( l_entry->label.number );
                 break;
             case LTYP_SECTION:
             case LTYP_NAMED:
