@@ -24,35 +24,19 @@
 *
 *  ========================================================================
 *
-* Description:  WHEN YOU FIGURE OUT WHAT THIS FILE DOES, PLEASE
-*               DESCRIBE IT HERE!
+* Description:  Stack related function prototypes
 *
 ****************************************************************************/
 
 
-void TimeSlice( void );
-#pragma aux TimeSlice = \
-        "mov ax,01680h" \
-        "int 02fh";
+#define SR_RETURN(x)    ((void *)(pointer_int)(x))
 
-int GetVM( void );
-#pragma aux GetVM = \
-        "mov ax,01683h" \
-        "int 02fh" \
-        value [bx];
+typedef void    *(*func_sr)(void *);
 
-//int CS( void );
-//#pragma aux CS = "mov ax,cs" value[ax];
-
-//int DS( void );
-//#pragma aux DS = "mov ax,ds" value[ax];
-
-extern void BeginCriticalSection( void );
-#pragma aux BeginCriticalSection = \
-        "mov ax,01681h" \
-        "int 02fh";
-
-extern void EndCriticalSection( void );
-#pragma aux EndCriticalSection = \
-        "mov ax,01682h" \
-        "int 02fh";
+extern  void    *SafeRecurseCG( func_sr rtn, void *arg );
+#if defined( __WATCOMC__ ) && defined( _M_IX86 ) && !defined( __NT__ )
+/* just to be sure! must not put any parametr on the stack */
+#pragma aux SafeRecurseCG __parm __caller [__eax __ebx __ecx __edx]
+#else
+/* nothing special */
+#endif

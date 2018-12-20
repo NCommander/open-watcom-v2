@@ -30,23 +30,23 @@
 
 
 #include "plusplus.h"
-#include "stacksr.h"
+#include "stackcpp.h"
 
 #if defined( __WATCOMC__ ) && defined( _M_IX86 ) && !defined( __NT__ )
 
 #include "walloca.h"
 
-extern char __near      *bp( void );
-#pragma aux bp = 0x89 0xe8 value [eax];
+extern char __near  *bp( void );
+#pragma aux bp = __value [__ebp];
 
-extern char __near      *sp( void );
-#pragma aux sp = value [esp];
+extern char __near  *sp( void );
+#pragma aux sp = __value [__esp];
 
-extern void             setsp( void __near * );
-#pragma aux setsp = 0x89 0xc4 parm [eax] modify [esp];
+extern void         setsp( void __near * );
+#pragma aux setsp = "mov esp,eax" __parm [__eax] __modify [__esp]
 
-extern void             setbp( void __near * );
-#pragma aux setbp = 0x89 0xc5 parm [eax];
+extern void         setbp( void __near * );
+#pragma aux setbp = "mov ebp,eax" __parm [__eax] __modify [__ebp]
 
 void *SafeRecurseCpp( func_sr rtn, void *arg )
 /********************************************/
