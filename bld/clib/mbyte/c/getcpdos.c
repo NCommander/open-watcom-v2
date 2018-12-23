@@ -159,15 +159,14 @@ typedef struct {
 unsigned short dos_get_code_page( void )
 /**************************************/
 {
-    unsigned short      real_seg;
     unsigned short      codepage = 0;
-
 
     /*** Get the code page ***/
     if( _IsPharLap() ) {
         union REGS      r;
         struct SREGS    sregs;
         PHARLAP_block   pblock;
+        unsigned short  real_seg;
 
         /*** Alloc DOS Memory under Phar Lap ***/
         memset( &r, 0, sizeof( r ) );
@@ -198,14 +197,11 @@ unsigned short dos_get_code_page( void )
         r.x.eax = 0x25c1;
         intdosx( &r, &r, &sregs );
     } else if( _IsRational() ) {
-        unsigned long       dpmi_rc;
-        unsigned short      selector;
+        dpmi_dos_block      dos_block;
         rm_call_struct      dblock;
 
         /*** Allocate some DOS memory with DPMI ***/
-        dpmi_rc = DPMIAllocateDOSMemoryBlock( 1 );      /* one paragraph is enough */
-        real_seg = (unsigned short) dpmi_rc;
-        selector = (unsigned short) (dpmi_rc>>16);
+        dos_block = DPMIAllocateDOSMemoryBlock( 1 );    /* one paragraph is enough */
 
         memset( &dblock, 0, sizeof( dblock ) );
         dblock.eax = 0x6501;                /* get international info */
@@ -213,13 +209,13 @@ unsigned short dos_get_code_page( void )
         dblock.ecx = 7;                     /* buffer size */
         dblock.edx = 0xFFFF;                /* current country */
         dblock.edi = 0;                     /* buffer offset */
-        dblock.es = real_seg;               /* buffer segment */
+        dblock.es = dos_block.rm;           /* buffer segment */
         DPMISimulateRealModeInterrupt( 0x21, 0, 0, &dblock );
         if( (dblock.flags & 1) == 0 ) {
-            codepage = *(unsigned short __far *)EXTENDER_RM2PM( real_seg, 5 );
+            codepage = *(unsigned short __far *)EXTENDER_RM2PM( dos_block.rm, 5 );
         }
         /*** Free DOS memory with DPMI ***/
-        DPMIFreeDOSMemoryBlock( selector );
+        DPMIFreeDOSMemoryBlock( dos_block.pm );
     }
 
     return( codepage );
