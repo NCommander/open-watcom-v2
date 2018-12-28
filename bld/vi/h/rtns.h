@@ -593,10 +593,12 @@ void    MatchFini( void );
 /* mem.c */
 void    *MemAlloc( size_t );
 void    *MemAllocUnsafe( size_t );
+char    **MemAllocList( int );
 void    MemFree( void * );
 void    MemFreePtr( void ** );
 void    MemFreeList( int, char ** );
 void    *MemReAlloc( void *, size_t );
+char    **MemReAllocList( char **, int );
 void    *MemReAllocUnsafe( void *ptr, size_t size );
 void    *StaticAlloc( void );
 void    StaticFree( char * );
@@ -705,7 +707,7 @@ void    FiniSavebufs( void );
 
 /* select.c */
 vi_rc   SelectItem( selectitem *si );
-vi_rc   SelectItemAndValue( window_info *, char *, char **, int , vi_rc (*)(const char *, char *, int * ), size_t, char **, int );
+vi_rc   SelectItemAndValue( window_info *, char *, char **, list_linenum, vi_rc (*)(const char *, char *, int * ), size_t, char **, int );
 
 /* selrgn.c */
 void    UpdateDrag( window_id, int, int );
