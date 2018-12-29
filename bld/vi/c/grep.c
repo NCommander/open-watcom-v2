@@ -197,7 +197,7 @@ static list_linenum initList( window_id wid, const char *dirlist, char **list )
 #else
                 if( len > 0 && ( len != 2 || dir[1] != DRV_SEP ) ) {
 #endif
-                        dir[len] = '\0';
+                    dir[len] = '\0';
                 }
             }
             if( IsDirectory( dir ) ) {
@@ -307,7 +307,7 @@ WINEXPORT INT_PTR CALLBACK GrepListDlgProc( HWND dlg, UINT msg, WPARAM wparam, L
         SendMessage( list_box, WM_SETFONT, (WPARAM)FontHandle( dirw_info.text_style.font ), 0L );
         MySprintf( tmp, "Files Containing \"%s\"", searchString );
         SetWindowText( dlg, tmp );
-        fileList = (char **)MemAlloc( sizeof( char * ) * MAX_FILES );
+        fileList = MemAllocList( MAX_FILES );
         fileCount = (int)initList( list_box, (const char *)lparam, fileList );
         if( fileCount == 0 ) {
             /* tell him that there are no matches and close down? */
@@ -380,7 +380,7 @@ WINEXPORT INT_PTR CALLBACK GrepListDlgProc95( HWND dlg, UINT msg, WPARAM wparam,
         lvc.pszText = "Line";
         lvc.iSubItem = 1;
         SendMessage( list_box, LVM_INSERTCOLUMN, 1, (LPARAM)&lvc );
-        fileList = (char **)MemAlloc( sizeof( char * ) * MAX_FILES );
+        fileList = MemAllocList( MAX_FILES );
         fileCount = (int)initList( list_box, (const char *)lparam, fileList );
         if( fileCount == 0 ) {
             Message1( "String \"%s\" not found", searchString );
@@ -480,7 +480,7 @@ static vi_rc doGREP( const char *dirlist )
      * prepare list array
      */
     clist = 0;
-    list = (char **)MemAlloc( sizeof( char * ) * MAX_FILES );
+    list = MemAllocList( MAX_FILES );
 
     /*
      * create info. window
@@ -504,7 +504,7 @@ static vi_rc doGREP( const char *dirlist )
             wi_disp.area.x1 = 14;
             wi_disp.area.x2 = EditVars.WindMaxWidth - 2;
             i = wi_disp.area.y2 - wi_disp.area.y1 + BORDERDIFF( wi_disp );
-            if( clist < i ) {
+            if( i > clist ) {
                 wi_disp.area.y2 -= (windim)( i - clist );
             }
             show_lineno = ( clist > i );
@@ -591,15 +591,19 @@ static vi_rc doGREP( const char *dirlist )
  */
 static void fileGrep( const char *dir, char **list, list_linenum *clist, window_id wid )
 {
-    char        fn[FILENAME_MAX], data[FILENAME_MAX], ts[FILENAME_MAX];
-    char        path[FILENAME_MAX];
-    char        drive[_MAX_DRIVE], directory[_MAX_DIR], name[_MAX_FNAME];
-    char        ext[_MAX_EXT];
-    int         i;
+    char            fn[FILENAME_MAX];
+    char            data[FILENAME_MAX];
+    char            ts[FILENAME_MAX];
+    char            path[FILENAME_MAX];
+    char            drive[_MAX_DRIVE];
+    char            directory[_MAX_DIR];
+    char            name[_MAX_FNAME];
+    char            ext[_MAX_EXT];
+    list_linenum    i;
 #if defined( __WIN__ ) && defined( __NT__ )
-    LVITEM      lvi;
+    LVITEM          lvi;
 #endif
-    vi_rc       rc;
+    vi_rc           rc;
 
     /*
      * get file path prefix
@@ -613,12 +617,10 @@ static void fileGrep( const char *dir, char **list, list_linenum *clist, window_
      * run through each entry and search it; building a list of matches
      */
     rc = GetSortDir( dir, false );
-    if( rc != ERR_NO_ERR ) {
-        return;
-    }
-    for( i = 0; i < DirFileCount; i++ ) {
-        if( !IS_SUBDIR( DirFiles[i] ) ) {
-
+    if( rc == ERR_NO_ERR ) {
+        for( i = 0; i < DirFileCount; i++ ) {
+            if( IS_SUBDIR( DirFiles[i] ) )
+                continue;
             strcpy( fn, path );
             strcat( fn, DirFiles[i]->name );
 #ifdef __WIN__
@@ -627,7 +629,7 @@ static void fileGrep( const char *dir, char **list, list_linenum *clist, window_
             DisplayLineInWindow( wid, 1, fn );
 #endif
             if( EditFlags.BreakPressed ) {
-                return;
+                break;
             }
             if( isFgrep ) {
                 rc = fSearch( fn, ts );
@@ -644,7 +646,7 @@ static void fileGrep( const char *dir, char **list, list_linenum *clist, window_
                  * and the entire string is added to it but only the file
                  * name is added to the list
                  */
-  #ifdef __NT__
+    #ifdef __NT__
                 if( IsCommCtrlLoaded() ) {
                     lvi.mask = LVIF_TEXT;
                     lvi.iItem = (int)SendMessage( wid, LVM_GETITEMCOUNT, 0, 0L );
@@ -655,18 +657,17 @@ static void fileGrep( const char *dir, char **list, list_linenum *clist, window_
                     lvi.pszText = ts;
                     SendMessage( wid, LVM_SETITEM, 0, (LPARAM)&lvi );
                 } else {
-  #endif
+    #endif
                     SendMessage( wid, LB_ADDSTRING, 0, (LPARAM)(LPSTR)data );
                     MySprintf( data, "%X", fn );
-  #ifdef __NT__
+    #ifdef __NT__
                 }
-  #endif
+    #endif
 #endif
                 list[*clist] = DupString( data );
                 (*clist)++;
-
             } else if( rc != ERR_NO_ERR ) {
-                return;
+                break;
             }
         }
     }
@@ -699,7 +700,7 @@ static vi_rc eSearch( const char *fn, char *res )
     if( buff != NULL ) {
         rc = ERR_NO_ERR;
         while( fgets( buff, EditVars.MaxLine, fp ) != NULL ) {
-            for( i = strlen( buff ); i && isEOL( buff[i - 1] ); --i ) {
+            for( i = strlen( buff ); i > 0 && isEOL( buff[i - 1] ); --i ) {
                 buff[i - 1] = '\0';
             }
             i = RegExec( cRx, buff, true );
@@ -738,88 +739,87 @@ static vi_rc fSearch( const char *fn, char *r )
      * init for file i/o
      */
     rc = FileOpen( fn, false, O_BINARY | O_RDONLY, 0, &handle );
-    if( rc != ERR_NO_ERR ) {
-        return( rc );
-    }
-    rc = ERR_NO_MEMORY;
-    buff = MemAlloc( MAXBYTECNT );
-    if( buff != NULL ) {
-        /*
-         * read in buffers from the file, and search through them
-         */
-        rc = ERR_NO_ERR;
-        strloc = searchString;  // don't reset at start of new block - could span blocks
-        for( ;; ) {
-            bcnt = bytes = read( handle, buff, MAXBYTECNT );
-            buffloc = buff;
-            while( bytes ) {
-                if( *strloc == cTable[*(unsigned char *)buffloc] ) {
-                    buffloc++;
-                    bytes--;
-                    strloc++;
-                    if( *strloc == '\0' ) {
-                        j = 0;
-                        if( buffloc - strlen( searchString ) < buff ) {
-                            // match spans blocks - see context_display
-                            // context_display isn't null terminated string
-                            res = context_display + MAX_DISP - 1;
-                            if( *res == LF ) {
-                                r[j] = '\0';
+    if( rc == ERR_NO_ERR ) {
+        rc = ERR_NO_MEMORY;
+        buff = MemAlloc( MAXBYTECNT );
+        if( buff != NULL ) {
+            /*
+             * read in buffers from the file, and search through them
+             */
+            rc = ERR_NO_ERR;
+            strloc = searchString;  // don't reset at start of new block - could span blocks
+            for( ;; ) {
+                bcnt = bytes = read( handle, buff, MAXBYTECNT );
+                buffloc = buff;
+                while( bytes ) {
+                    if( *strloc == cTable[*(unsigned char *)buffloc] ) {
+                        buffloc++;
+                        bytes--;
+                        strloc++;
+                        if( *strloc == '\0' ) {
+                            j = 0;
+                            if( buffloc - strlen( searchString ) < buff ) {
+                                // match spans blocks - see context_display
+                                // context_display isn't null terminated string
+                                res = context_display + MAX_DISP - 1;
+                                if( *res == LF ) {
+                                    r[j] = '\0';
+                                } else {
+                                    for( ; res != context_display; res-- ) {
+                                        if( *res == LF ) {
+                                            res++;
+                                            break;
+                                        }
+                                    }
+                                    // copy the part of the string NOT in buff
+                                    while( j < MAX_DISP && *res != CR && *res != LF ) {
+                                        r[j++] = *res;
+                                        res++;
+                                    }
+                                    r[j] = '\0';
+                                }
+                                res = buff;
                             } else {
-                                for( ; res != context_display; res-- ) {
+                                res = buffloc - strlen( searchString );
+                                for( ; res != buff; res-- ) {
                                     if( *res == LF ) {
                                         res++;
                                         break;
                                     }
                                 }
-                                // copy the part of the string NOT in buff
-                                while( j < MAX_DISP && *res != CR && *res != LF ) {
-                                    r[j++] = *res;
-                                    res++;
-                                }
-                                r[j] = '\0';
                             }
-                            res = buff;
-                        } else {
-                            res = buffloc - strlen( searchString );
-                            for( ; res != buff; res-- ) {
-                                if( *res == LF ) {
-                                    res++;
-                                    break;
-                                }
+                            // now copy the string ( all that is in buff )
+                            while( j < MAX_DISP && res != buff + MAXBYTECNT && *res != CR && *res != LF ) {
+                                r[j++] = *res;
+                                res++;
                             }
+                            r[j] = '\0';
+                            rc = FGREP_FOUND_STRING;
+                            break;
                         }
-                        // now copy the string ( all that is in buff )
-                        while( j < MAX_DISP && res != buff + MAXBYTECNT && *res != CR && *res != LF ) {
-                            r[j++] = *res;
-                            res++;
-                        }
-                        r[j] = '\0';
-                        rc = FGREP_FOUND_STRING;
-                        break;
-                    }
-                } else {
-                    if( strloc == searchString ) {
-                        buffloc++;
-                        bytes--;
                     } else {
-                        strloc = searchString;
+                        if( strloc == searchString ) {
+                            buffloc++;
+                            bytes--;
+                        } else {
+                            strloc = searchString;
+                        }
                     }
-                }
 
+                }
+                if( bcnt != MAXBYTECNT || rc == FGREP_FOUND_STRING ) {
+                    break;
+                }
+                if( strloc != searchString ) {
+                    // partial match -- keep the last bunch of text as context
+                    // context_display isn't null terminated string
+                    strncpy( context_display, buffloc - MAX_DISP, MAX_DISP );
+                }
             }
-            if( bcnt != MAXBYTECNT || rc == FGREP_FOUND_STRING ) {
-                break;
-            }
-            if( strloc != searchString ) {
-                // partial match -- keep the last bunch of text as context
-                // context_display isn't null terminated string
-                strncpy( context_display, buffloc - MAX_DISP, MAX_DISP );
-            }
+            MemFree( buff );
         }
-        MemFree( buff );
+        close( handle );
     }
-    close( handle );
     return( rc );
 
 } /* fSearch */

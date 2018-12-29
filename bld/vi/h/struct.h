@@ -597,6 +597,7 @@ typedef struct {
 } hilst;
 
 typedef int             list_linenum;
+
 /*
  * SelectItem data
  */

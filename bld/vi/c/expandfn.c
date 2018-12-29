@@ -39,15 +39,17 @@
  * ExpandFileNames - take a file name, and expand it out to a list of dos
  *                   file names
  */
-int ExpandFileNames( char *p, char ***argv )
+list_linenum ExpandFileNames( const char *p, char ***argv )
 {
-    int         argc, i;
-    char        drive[_MAX_DRIVE], directory[_MAX_DIR], name[_MAX_FNAME];
-    char        extin[_MAX_EXT], pathin[FILENAME_MAX];
-    char        *start, *new;
-    bool        wildcard;
-    vi_rc       rc;
-    char        c;
+    list_linenum    argc;
+    list_linenum    i;
+    char            drive[_MAX_DRIVE], directory[_MAX_DIR], name[_MAX_FNAME];
+    char            extin[_MAX_EXT], pathin[FILENAME_MAX];
+    const char      *start;
+    char            *new;
+    bool            wildcard;
+    vi_rc           rc;
+    char            c;
 
     argc = 0;
     wildcard = false;
@@ -68,7 +70,7 @@ int ExpandFileNames( char *p, char ***argv )
     if( !wildcard ) {
         // don't change to lowercase any more
         //FileLower( start );
-        *argv = MemReAlloc( *argv, sizeof( char * ) );
+        *argv = MemReAllocList( *argv, argc + 1 );
         new = MemAlloc( strlen( start ) + 1 );
         (*argv)[argc++] = new;
         strcpy( new, start );
@@ -80,7 +82,7 @@ int ExpandFileNames( char *p, char ***argv )
      */
     rc = GetSortDir( start, false );
     if( rc != ERR_NO_ERR ) {
-        *argv = MemReAlloc( *argv, sizeof( char * ) );
+        *argv = MemReAllocList( *argv, argc + 1 );
         new = MemAlloc( strlen( start ) + 1 );
         (*argv)[argc++] = new;
         strcpy( new, start );
@@ -96,10 +98,10 @@ int ExpandFileNames( char *p, char ***argv )
             continue;
         _splitpath( DirFiles[i]->name, NULL, NULL, name, extin );
         _makepath( pathin, drive, directory, name, extin );
-        *argv = MemReAlloc( *argv, (argc + 1) * sizeof( char * ) );
+        *argv = MemReAllocList( *argv, argc + 1 );
         new = MemAlloc( strlen( pathin ) + 1 );
-        strcpy( new, pathin );
         (*argv)[argc++] = new;
+        strcpy( new, pathin );
     }
     return( argc );
 

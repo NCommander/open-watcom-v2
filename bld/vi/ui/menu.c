@@ -296,7 +296,7 @@ static void initMenuList( menu *cmenu )
 
     MemFree( cmenu->list );
     MemFree( cmenu->hilist );
-    cmenu->list = MemAlloc( sizeof( char * ) * cmenu->itemcnt );
+    cmenu->list = MemAllocList( cmenu->itemcnt );
     cmenu->hilist = MemAlloc( sizeof( hilst ) * (cmenu->itemcnt + 1) );
 
     cmi = cmenu->itemhead;
@@ -695,7 +695,6 @@ static vi_rc processMenu( int sel, menu *cmenu, windim xpos, windim ypos, windim
     }
 
     for( ;; ) {
-
         if( cmenu->has_file_list ) {
             addFileList( cmenu );
         }
