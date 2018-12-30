@@ -145,7 +145,7 @@ static list_linenum PickATag( list_linenum tag_count, char **tag_list, const cha
     si.result = NULL;
     si.num = 0;
     si.allowrl = NULL;
-    si.hilite = NULL;
+    si.hi_list = NULL;
     si.retevents = NULL;
     si.event = VI_KEY( DUMMY );
     si.cln = 1;
@@ -176,7 +176,7 @@ static vi_rc selectTag( FILE *fp, const char *str, char *buff, char *fname )
     p = GetNextWord1( buff, tag );
     for( ;; ) {
         p = SkipLeadingSpaces( p );
-        tag_list = MemReAllocList( tag_list, tag_count + 1 );
+        tag_list = _MemReAllocList( tag_list, tag_count + 1 );
         tag_list[tag_count] = DupString( p );
         i = 0;
         p = tag_list[tag_count];

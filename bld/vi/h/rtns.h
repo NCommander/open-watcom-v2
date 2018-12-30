@@ -40,7 +40,7 @@ void    DeleteString( char ** );
 
 /* alias.c */
 vi_rc   SetAlias( const char * );
-vi_rc   CheckAlias( const char *, char * );
+alias_list *CheckAlias( const char *str );
 bool    CheckAbbrev( const char *, int * );
 vi_rc   Abbrev( const char * );
 vi_rc   UnAbbrev( const char * );
@@ -593,12 +593,10 @@ void    MatchFini( void );
 /* mem.c */
 void    *MemAlloc( size_t );
 void    *MemAllocUnsafe( size_t );
-char    **MemAllocList( int );
 void    MemFree( void * );
 void    MemFreePtr( void ** );
-void    MemFreeList( int, char ** );
+void    MemFreeList( list_linenum, char ** );
 void    *MemReAlloc( void *, size_t );
-char    **MemReAllocList( char **, int );
 void    *MemReAllocUnsafe( void *ptr, size_t size );
 void    *StaticAlloc( void );
 void    StaticFree( char * );
@@ -607,6 +605,11 @@ void    StaticFini( void );
 char    *MemStrDup( const char * );
 void    InitMem( void );
 void    FiniMem( void );
+
+#define _MemAllocArray(t,c)     (t *)MemAlloc( (c) * sizeof( t ) )
+#define _MemReAllocArray(p,t,c) (t *)MemReAlloc( p, (c) * sizeof( t ) )
+#define _MemAllocList(c)        (char **)MemAlloc( (c) * sizeof( char * ) )
+#define _MemReAllocList(p,c)    (char **)MemReAlloc( p, (c) * sizeof( char * ) )
 
 /* misc.c */
 long    ExecCmd( const char *, const char *, const char * );
@@ -669,7 +672,7 @@ void    GetEndString( char *data, char *res );
 void    ParseConfigFile( char * );
 
 /* parsecl.c */
-vi_rc   ParseCommandLine( const char *, linenum *, bool *, linenum *, bool *, int *, const char ** );
+vi_rc   ParseCommandLine( const char *, linenum *, bool *, linenum *, bool *, int *, char * );
 vi_rc   GetAddress( const char **, linenum * );
 
 /* printf.c */
